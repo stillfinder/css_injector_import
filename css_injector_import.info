@@ -1,0 +1,5 @@
+name = CSS Injector import
+description = Import CSS Injector rules from production to pre-production environments
+dependencies[] = css_injector
+core = 7.x
+configure = admin/config/system/css_injector_import

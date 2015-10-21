@@ -1,0 +1,96 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function css_injector_import_menu() {
+  $items['admin/config/system/css_injector_import'] = array(
+    'title' => 'CSS Injector import settings',
+    'description' => t('CSS Injector import configuration.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('css_injector_import_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+function css_injector_import_settings_form($form, &$form_state) {
+  $form['warning'] = array(
+    '#markup' => 'Never use on Production sites !!!',
+    '#prefix' => '<div style="color:red; font-weight: bold;">',
+    '#suffix' => '</div>',
+  );
+
+  $form['css_injector_import_prod_url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Production site URL'),
+    '#description' => t('URL from which import CSS Injector rules. Usually "http://my.domain.com/sites/default/files/css_injector/"'),
+    '#size' => 100,
+    '#maxlength' => 255,
+    '#default_value' => variable_get('css_injector_import_prod_url', 'http://my.domain.com/sites/default/files/css_injector/'),
+  );
+
+  $form['css_injector_import_max_css_rules_count'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Max css rules count'),
+    '#description' => t('Maximum number of CSS Injector\'s rule.'),
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#element_validate' => array('element_validate_number'),
+    '#default_value' => variable_get('css_injector_import_max_css_rules_count', 0),
+  );
+
+  $form['css_injector_import_update_rules'] = array(
+    '#type' => 'submit',
+    '#value' => t('Update CSS Injector rules and Save configuration'),
+    '#validate' => array('css_injector_import_validate_settings'),
+    '#submit' => array('css_injector_import_update_rules'),
+  );
+
+  $form['#validate'][] = 'css_injector_import_validate_settings';
+
+  return system_settings_form($form);
+}
+
+function css_injector_import_validate_settings($form, &$form_state) {
+  $prod_url = $form_state['values']['css_injector_import_prod_url'];
+  if (!valid_url($prod_url, TRUE)) {
+    form_set_error('css_injector_import_prod_url', 'Not valid URL');
+  }
+
+  $max_rules_count = $form_state['values']['css_injector_import_max_css_rules_count'];
+  if (!is_numeric($max_rules_count) || $max_rules_count <= 0) {
+    form_set_error('css_injector_import_max_css_rules_count', 'Max css rules count should be a positive number');
+  }
+}
+
+function css_injector_import_update_rules($form, &$form_state) {
+  $prod_url = $form_state['values']['css_injector_import_prod_url'];
+  variable_set('css_injector_import_prod_url', $prod_url);
+
+  $max_rules_count = $form_state['values']['css_injector_import_max_css_rules_count'];
+  variable_set('css_injector_import_max_css_rules_count', $max_rules_count);
+
+  for ($i = 0; $i <= $max_rules_count; $i++) {
+    $file_name = "css_injector_{$i}.css";
+    $file_path = $prod_url . $file_name;
+    $file_content = file_get_contents($file_path);
+
+    if (!$file_content) {
+      drupal_set_message(t('File !file_path does not exist.', array('!file_path' => $file_path)), 'warning');
+      continue;
+    }
+
+    $local_file_path = _css_injector_rule_uri($i);
+
+    if (file_unmanaged_save_data($file_content, $local_file_path, FILE_EXISTS_REPLACE)) {
+      drupal_set_message(t('File !file_path successfully imported.', array('!file_path' => $file_path)), 'notice');
+    }
+    else {
+      drupal_set_message(t('Unable to save !file_path file.', array('!file_path' => $file_path)), 'warning');
+    }
+  }
+}
+
